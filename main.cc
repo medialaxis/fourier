@@ -79,19 +79,28 @@ static double error(Signal const& a, Signal const& b)
     return sqrt(std::real(dot(e, e)));
 }
 
-int main()
+static double test_residue(Signal const& test_signal)
 {
-    Signal signal(1024, 1);
-    Signal spectrum = dft(signal);
-    Signal signal2 = idft(spectrum);
-    double e = error(signal, signal2);
-    std::cout << "e=" << e << "\n";
-    if (e < eps) {
-        std::cout << "PASS\n";
+    return error(test_signal, idft(dft(test_signal)));
+}
+
+#define TEST(signal) test(#signal, signal)
+
+static void test(const char* test_name, Signal const& test_signal)
+{
+    double residue = test_residue(test_signal);
+    if (residue < eps) {
+        std::cout << test_name << ": PASS: residue=" << residue << "\n";
     }
     else {
-        std::cout << "FAIL\n";
+        std::cout << test_name << ": FAIL: residue=" << residue << "\n";
     }
+}
+
+int main()
+{
+    TEST(Signal(1024, 1));
+    TEST(Signal(1024, 10));
 
     return 0;
 }
