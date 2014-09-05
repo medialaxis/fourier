@@ -101,7 +101,7 @@ static void test(const char* test_name, Signal const& test_signal)
 static Signal random_signal(size_t size)
 {
     std::default_random_engine generator(0);
-    std::uniform_real_distribution<double> distribution(0.0,1.0);
+    std::uniform_real_distribution<double> distribution(0.0, 1.0);
 
     Signal result(size);
     for (size_t i = 0; i != result.size(); ++i) {
