@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <iostream>
+#include <random>
 
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> Signal;
@@ -97,10 +98,22 @@ static void test(const char* test_name, Signal const& test_signal)
     }
 }
 
+static Signal random_signal(size_t size)
+{
+    std::default_random_engine generator(0);
+    std::uniform_real_distribution<double> distribution(0.0,1.0);
+
+    Signal result(size);
+    for (size_t i = 0; i != result.size(); ++i) {
+        result[i] = distribution(generator);
+    }
+    return result;
+}
+
 int main()
 {
     TEST(Signal(1024, 1));
-    TEST(Signal(1024, 10));
+    TEST(random_signal(1024));
 
     return 0;
 }
