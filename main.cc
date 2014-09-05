@@ -5,10 +5,11 @@
 #include <complex>
 #include <iostream>
 
-static const double eps = 0.01;
-
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> Signal;
+
+static const double eps = 0.01;
+static const Complex i(0, 1);
 
 static Signal operator-(Signal const& a, Signal const& b)
 {
@@ -40,12 +41,36 @@ static Complex dot(Signal const& a, Signal const& b)
 
 static Signal dft(Signal const& signal)
 {
-    return signal;
+    Signal result(signal.size());
+
+    for (size_t k = 0; k != result.size(); ++k) {
+        Complex c(0, 0);
+
+        for (size_t n = 0; n != signal.size(); ++n) {
+            c += signal[n]*exp(-i*2.0*M_PI*(double) k*(double) n/(double) signal.size());
+        }
+
+        result[k] = c;
+    }
+
+    return result;
 }
 
 static Signal idft(Signal const& spectrum)
 {
-    return spectrum;
+    Signal result(spectrum.size());
+
+    for (size_t n = 0; n != result.size(); ++n) {
+        Complex c(0, 0);
+
+        for (size_t k = 0; k != spectrum.size(); ++k) {
+            c += spectrum[k]*exp(i*2.0*M_PI*(double) k*(double) n/(double) spectrum.size());
+        }
+
+        result[n] = c/(double) spectrum.size();
+    }
+
+    return result;
 }
 
 static double error(Signal const& a, Signal const& b)
@@ -56,10 +81,12 @@ static double error(Signal const& a, Signal const& b)
 
 int main()
 {
-    Signal signal(1024);
+    Signal signal(1024, 1);
     Signal spectrum = dft(signal);
     Signal signal2 = idft(spectrum);
-    if (error(signal, signal2) < eps) {
+    double e = error(signal, signal2);
+    std::cout << "e=" << e << "\n";
+    if (e < eps) {
         std::cout << "PASS\n";
     }
     else {
