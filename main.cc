@@ -90,10 +90,10 @@ static void test(const char* test_name, Signal const& test_signal)
 {
     double residue = test_residue(test_signal);
     if (residue < eps) {
-        std::cout << test_name << ": PASS: residue=" << residue << "\n";
+        std::cout << test_name << ": PASS: residue=" << residue << std::endl;
     }
     else {
-        std::cout << test_name << ": FAIL: residue=" << residue << "\n";
+        std::cout << test_name << ": FAIL: residue=" << residue << std::endl;
     }
 }
 
