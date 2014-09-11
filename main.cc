@@ -74,22 +74,41 @@ static Signal idft(Signal const& spectrum)
     return result;
 }
 
+static Signal fft(Signal const& signal)
+{
+    return signal;
+}
+
+static Signal ifft(Signal const& spectrum)
+{
+    return spectrum;
+}
+
 static double error(Signal const& a, Signal const& b)
 {
     auto e = a - b;
     return sqrt(std::real(dot(e, e)));
 }
 
-static double test_residue(Signal const& test_signal)
+static double prop_inverse_dft(Signal const& test_signal)
 {
     return error(test_signal, idft(dft(test_signal)));
 }
 
+static double prop_inverse_fft(Signal const& test_signal)
+{
+    return error(test_signal, ifft(fft(test_signal)));
+}
+
+static double prop_dft_equal_fft(Signal const& test_signal)
+{
+    return error(dft(test_signal), fft(test_signal));
+}
+
 #define TEST(signal) test(#signal, signal)
 
-static void test(const char* test_name, Signal const& test_signal)
+static void test(const char* test_name, double residue)
 {
-    double residue = test_residue(test_signal);
     if (residue < eps) {
         std::cout << test_name << ": PASS: residue=" << residue << std::endl;
     }
@@ -112,8 +131,12 @@ static Signal random_signal(size_t size)
 
 int main()
 {
-    TEST(Signal(1024, 1));
-    TEST(random_signal(1024));
+    TEST(prop_inverse_dft(Signal(1024, 1)));
+    TEST(prop_inverse_dft(random_signal(1024)));
+    TEST(prop_inverse_fft(Signal(1024, 1)));
+    TEST(prop_inverse_fft(random_signal(1024)));
+    TEST(prop_dft_equal_fft(Signal(1024, 1)));
+    TEST(prop_dft_equal_fft(random_signal(1024)));
 
     return 0;
 }
