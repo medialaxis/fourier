@@ -74,9 +74,45 @@ static Signal idft(Signal const& spectrum)
     return result;
 }
 
+static inline Complex w(int k, int n)
+{
+    return exp(-i*2.0*M_PI*(double) k/(double) n);
+}
+
+static inline size_t index(size_t total_size, size_t offset, size_t sample_count, size_t sample)
+{
+    return offset + total_size/sample_count*sample;
+}
+
 static Signal fft(Signal const& signal)
 {
-    return signal;
+    Signal result = signal;
+
+    size_t const N = signal.size();
+
+    size_t sample_count = 2;
+    size_t offset_count = N/2;
+    while (sample_count <= N) {
+        assert(sample_count*offset_count == N);
+
+        for (size_t offset = 0; offset != offset_count; ++offset) {
+            for (size_t sample = 0; sample != sample_count/2; ++sample) {
+                Complex even = result[index(N, offset, sample_count/2, sample)];
+                Complex odd = result[index(N, offset + N/sample_count, sample_count/2, sample)];
+
+                size_t sample1 = sample;
+                size_t sample2 = sample1 + sample_count/2;
+
+                result[index(N, offset, sample_count, sample1)] = even + w(sample1, sample_count)*odd;
+                result[index(N, offset, sample_count, sample2)] = even + w(sample2, sample_count)*odd;
+            }
+        }
+
+        sample_count <<= 1;
+        offset_count >>= 1;
+    }
+
+    return result;
 }
 
 static Signal ifft(Signal const& spectrum)
@@ -136,7 +172,10 @@ int main()
     TEST(prop_inverse_fft(Signal(1024, 1)));
     TEST(prop_inverse_fft(random_signal(1024)));
     TEST(prop_dft_equal_fft(Signal(1024, 1)));
+    TEST(prop_dft_equal_fft(random_signal(4)));
     TEST(prop_dft_equal_fft(random_signal(1024)));
+    TEST(prop_dft_equal_fft(Signal(2, 1)));
+    TEST(prop_dft_equal_fft(Signal(4, 1)));
 
     return 0;
 }
