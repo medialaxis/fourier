@@ -5,6 +5,7 @@
 #include <complex>
 #include <iostream>
 #include <random>
+#include <boost/noncopyable.hpp>
 
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> Signal;
@@ -79,37 +80,37 @@ static inline Complex w(int k, int n)
     return exp(-i*2.0*M_PI*(double) k/(double) n);
 }
 
-static inline size_t index(size_t total_size, size_t offset, size_t sample_count, size_t sample)
-{
-    return offset + total_size/sample_count*sample;
-}
-
 static Signal fft(Signal const& signal)
 {
-    Signal result = signal;
-
     size_t const N = signal.size();
+    Signal result(N);
 
+    for (size_t i = 0; i != N/2; ++i) {
+        result[2*i] = signal[i];
+        result[2*i+1] = signal[N/2+i];
+    }
+
+    size_t transform_count = N/2;
     size_t sample_count = 2;
-    size_t offset_count = N/2;
     while (sample_count <= N) {
-        assert(sample_count*offset_count == N);
+        assert(transform_count*sample_count == N);
 
-        for (size_t offset = 0; offset != offset_count; ++offset) {
+        for (size_t transform = 0; transform != transform_count; ++transform) {
             for (size_t sample = 0; sample != sample_count/2; ++sample) {
-                Complex even = result[index(N, offset, sample_count/2, sample)];
-                Complex odd = result[index(N, offset + N/sample_count, sample_count/2, sample)];
-
+                size_t offset = transform*sample_count;
                 size_t sample1 = sample;
-                size_t sample2 = sample1 + sample_count/2;
+                size_t sample2 = sample + sample_count/2;
 
-                result[index(N, offset, sample_count, sample1)] = even + w(sample1, sample_count)*odd;
-                result[index(N, offset, sample_count, sample2)] = even + w(sample2, sample_count)*odd;
+                Complex even = result[offset+sample1];
+                Complex odd = result[offset+sample2];
+
+                result[offset+sample1] = even + w(sample1, sample_count)*odd;
+                result[offset+sample2] = even + w(sample2, sample_count)*odd;
             }
         }
 
+        transform_count >>= 1;
         sample_count <<= 1;
-        offset_count >>= 1;
     }
 
     return result;
@@ -176,6 +177,7 @@ int main()
     TEST(prop_dft_equal_fft(random_signal(1024)));
     TEST(prop_dft_equal_fft(Signal(2, 1)));
     TEST(prop_dft_equal_fft(Signal(4, 1)));
+    TEST(prop_dft_equal_fft(Signal(8, 1)));
 
     return 0;
 }
