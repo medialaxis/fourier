@@ -223,6 +223,7 @@ int main()
     TEST(prop_idft_equal_ifft(Signal(2, 1)));
     TEST(prop_idft_equal_ifft(Signal(4, 1)));
     TEST(prop_idft_equal_ifft(Signal(8, 1)));
+    TEST(prop_idft_equal_ifft(random_signal(1024)));
 
     return 0;
 }
