@@ -75,12 +75,12 @@ static Signal idft(Signal const& spectrum)
     return result;
 }
 
-static inline Complex w(int k, int N)
+static inline Complex W(int k, int N)
 {
     return exp(-i*2.0*M_PI*(double) k/(double) N);
 }
 
-static inline Complex q(int n, int N)
+static inline Complex Q(int n, int N)
 {
     return exp(i*2.0*M_PI*(double) n/(double) N);
 }
@@ -109,8 +109,8 @@ static Signal fft(Signal const& signal)
                 Complex even = result[offset+sample1];
                 Complex odd = result[offset+sample2];
 
-                result[offset+sample1] = even + w(sample1, sample_count)*odd;
-                result[offset+sample2] = even + w(sample2, sample_count)*odd;
+                result[offset+sample1] = even + W(sample1, sample_count)*odd;
+                result[offset+sample2] = even + W(sample2, sample_count)*odd;
             }
         }
 
@@ -145,8 +145,8 @@ static Signal ifft(Signal const& spectrum)
                 Complex even = result[offset+sample1];
                 Complex odd = result[offset+sample2];
 
-                result[offset+sample1] = Complex(2,0)*(even + q(sample1, sample_count)*odd);
-                result[offset+sample2] = Complex(2,0)*(even + q(sample2, sample_count)*odd);
+                result[offset+sample1] = 1/2.0*(even + Q(sample1, sample_count)*odd);
+                result[offset+sample2] = 1/2.0*(even + Q(sample2, sample_count)*odd);
             }
         }
 
@@ -178,6 +178,11 @@ static double prop_dft_equal_fft(Signal const& test_signal)
     return error(dft(test_signal), fft(test_signal));
 }
 
+static double prop_idft_equal_ifft(Signal const& test_signal)
+{
+    return error(idft(test_signal), ifft(test_signal));
+}
+
 #define TEST(signal) test(#signal, signal)
 
 static void test(const char* test_name, double residue)
@@ -206,6 +211,7 @@ int main()
 {
     TEST(prop_inverse_dft(Signal(1024, 1)));
     TEST(prop_inverse_dft(random_signal(1024)));
+    TEST(prop_inverse_fft(Signal(2, 1)));
     TEST(prop_inverse_fft(Signal(1024, 1)));
     TEST(prop_inverse_fft(random_signal(1024)));
     TEST(prop_dft_equal_fft(Signal(1024, 1)));
@@ -214,6 +220,9 @@ int main()
     TEST(prop_dft_equal_fft(Signal(2, 1)));
     TEST(prop_dft_equal_fft(Signal(4, 1)));
     TEST(prop_dft_equal_fft(Signal(8, 1)));
+    TEST(prop_idft_equal_ifft(Signal(2, 1)));
+    TEST(prop_idft_equal_ifft(Signal(4, 1)));
+    TEST(prop_idft_equal_ifft(Signal(8, 1)));
 
     return 0;
 }
