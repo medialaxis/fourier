@@ -13,6 +13,19 @@ typedef std::vector<Complex> Signal;
 static const double eps = 0.01;
 static const Complex i(0, 1);
 
+static size_t reverse_bits(size_t n, size_t max)
+{
+    size_t result = 0;
+
+    for (size_t i = 1; i != max; i <<= 1) {
+        result <<= 1;
+        result |= (n & 1);
+        n >>= 1;
+    }
+
+    return result;
+}
+
 static Signal operator-(Signal const& a, Signal const& b)
 {
     assert(a.size() == b.size());
@@ -85,37 +98,48 @@ static inline Complex Q(int n, int N)
     return exp(i*2.0*M_PI*(double) n/(double) N);
 }
 
+static void fft_step(Complex* spectrum, size_t spectrumSize)
+{
+    for (size_t i = 0; i != spectrumSize/2; ++i) {
+        size_t sample1 = i;
+        size_t sample2 = i + spectrumSize/2;
+
+        Complex even = spectrum[sample1];
+        Complex odd = spectrum[sample2];
+
+        spectrum[sample1] = even + W(sample1, spectrumSize)*odd;
+        spectrum[sample2] = even + W(sample2, spectrumSize)*odd;
+    }
+}
+
+static void print_signal(std::string name, Signal const& signal) __attribute__((unused));
+static void print_signal(std::string name, Signal const& signal)
+{
+    std::cout << name << "=";
+    for (size_t i = 0; i != signal.size(); ++i) {
+        std::cout << signal[i] << ",";
+    }
+    std::cout << "\n";
+}
+
 static Signal fft(Signal const& signal)
 {
     size_t const N = signal.size();
     Signal result(N);
 
-    for (size_t i = 0; i != N/2; ++i) {
-        result[2*i] = signal[i];
-        result[2*i+1] = signal[N/2+i];
+    for (size_t i = 0; i != N; ++i) {
+        result[i] = signal[reverse_bits(i, N)];
     }
 
     size_t transform_count = N/2;
-    size_t sample_count = 2;
-    while (sample_count <= N) {
-        assert(transform_count*sample_count == N);
+    while (transform_count >= 1) {
+        size_t sample_count = N/transform_count;
 
         for (size_t transform = 0; transform != transform_count; ++transform) {
-            for (size_t sample = 0; sample != sample_count/2; ++sample) {
-                size_t offset = transform*sample_count;
-                size_t sample1 = sample;
-                size_t sample2 = sample + sample_count/2;
-
-                Complex even = result[offset+sample1];
-                Complex odd = result[offset+sample2];
-
-                result[offset+sample1] = even + W(sample1, sample_count)*odd;
-                result[offset+sample2] = even + W(sample2, sample_count)*odd;
-            }
+            fft_step(&result[transform*sample_count], sample_count);
         }
 
         transform_count >>= 1;
-        sample_count <<= 1;
     }
 
     return result;
@@ -131,8 +155,8 @@ static Signal ifft(Signal const& spectrum)
         result[2*i+1] = spectrum[N/2+i];
     }
 
-    size_t transform_count = N/2;
     size_t sample_count = 2;
+    size_t transform_count = N/sample_count;
     while (sample_count <= N) {
         assert(transform_count*sample_count == N);
 
@@ -183,15 +207,55 @@ static double prop_idft_equal_ifft(Signal const& test_signal)
     return error(idft(test_signal), ifft(test_signal));
 }
 
-#define TEST(signal) test(#signal, signal)
+static double prop_fft_is_decomposed_dft(Signal const& test_signal)
+{
+    Signal even_samples;
+    Signal odd_samples;
 
-static void test(const char* test_name, double residue)
+    // Partition even and odd samples.
+    for (size_t i = 0; i != test_signal.size()/2; ++i) {
+        even_samples.push_back(test_signal[2*i]);
+        odd_samples.push_back(test_signal[2*i + 1]);
+    }
+
+    Signal even_spectrum = dft(even_samples);
+    Signal odd_spectrum = dft(odd_samples);
+
+    Signal intermediate_spectrum;
+    intermediate_spectrum.insert(intermediate_spectrum.end(), even_spectrum.begin(), even_spectrum.end());
+    intermediate_spectrum.insert(intermediate_spectrum.end(), odd_spectrum.begin(), odd_spectrum.end());
+
+    fft_step(&intermediate_spectrum[0], intermediate_spectrum.size());
+
+    return error(dft(test_signal), intermediate_spectrum);
+}
+
+static bool prop_reverse_bits(size_t n, size_t max, size_t correct)
+{
+    return reverse_bits(n, max) == correct;
+}
+
+#define TEST_RESIDUE(signal) test_residue(#signal, signal)
+
+static void test_residue(const char* test_name, double residue)
 {
     if (residue < eps) {
         std::cout << test_name << ": PASS: residue=" << residue << std::endl;
     }
     else {
         std::cout << test_name << ": FAIL: residue=" << residue << std::endl;
+    }
+}
+
+#define TEST(prop) test(#prop, prop)
+
+static void test(const char* test_name, bool result)
+{
+    if (result) {
+        std::cout << test_name << ": PASS" << std::endl;
+    }
+    else {
+        std::cout << test_name << ": FAIL" << std::endl;
     }
 }
 
@@ -209,21 +273,21 @@ static Signal random_signal(size_t size)
 
 int main()
 {
-    TEST(prop_inverse_dft(Signal(1024, 1)));
-    TEST(prop_inverse_dft(random_signal(1024)));
-    TEST(prop_inverse_fft(Signal(2, 1)));
-    TEST(prop_inverse_fft(Signal(1024, 1)));
-    TEST(prop_inverse_fft(random_signal(1024)));
-    TEST(prop_dft_equal_fft(Signal(1024, 1)));
-    TEST(prop_dft_equal_fft(random_signal(4)));
-    TEST(prop_dft_equal_fft(random_signal(1024)));
-    TEST(prop_dft_equal_fft(Signal(2, 1)));
-    TEST(prop_dft_equal_fft(Signal(4, 1)));
-    TEST(prop_dft_equal_fft(Signal(8, 1)));
-    TEST(prop_idft_equal_ifft(Signal(2, 1)));
-    TEST(prop_idft_equal_ifft(Signal(4, 1)));
-    TEST(prop_idft_equal_ifft(Signal(8, 1)));
-    TEST(prop_idft_equal_ifft(random_signal(1024)));
+    TEST_RESIDUE(prop_inverse_dft(Signal(1024, 1)));
+    TEST_RESIDUE(prop_inverse_dft(random_signal(1024)));
+    TEST_RESIDUE(prop_inverse_fft(Signal(2, 1)));
+    TEST_RESIDUE(prop_inverse_fft(Signal(1024, 1)));
+    TEST_RESIDUE(prop_inverse_fft(random_signal(1024)));
+    TEST_RESIDUE(prop_dft_equal_fft(Signal(1024, 1)));
+    TEST_RESIDUE(prop_dft_equal_fft(random_signal(4)));
+    TEST_RESIDUE(prop_dft_equal_fft(random_signal(1024)));
+    TEST_RESIDUE(prop_dft_equal_fft(Signal{7,6,5,4,3,2,i,0}));
+    TEST_RESIDUE(prop_idft_equal_ifft(random_signal(1024)));
+    TEST_RESIDUE(prop_idft_equal_ifft(Signal{1.1,i,2.1,3}));
+    TEST_RESIDUE(prop_fft_is_decomposed_dft(Signal{7,6,5,4,3,2,i,0}));
+    TEST_RESIDUE(prop_fft_is_decomposed_dft(random_signal(1024)));
+    TEST(prop_reverse_bits(0xAA, 0x100, 0x55));
+    TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
 
     return 0;
 }
