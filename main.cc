@@ -269,7 +269,7 @@ static Signal random_signal(size_t size)
 
     Signal result(size);
     for (size_t i = 0; i != result.size(); ++i) {
-        result[i] = distribution(generator);
+        result[i] = Complex(distribution(generator), distribution(generator));
     }
     return result;
 }
