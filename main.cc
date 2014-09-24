@@ -145,14 +145,27 @@ static Signal fft(Signal const& signal)
     return result;
 }
 
+static void ifft_step(Complex* spectrum, size_t spectrumSize)
+{
+    for (size_t i = 0; i != spectrumSize/2; ++i) {
+        size_t sample1 = i;
+        size_t sample2 = i + spectrumSize/2;
+
+        Complex even = spectrum[sample1];
+        Complex odd = spectrum[sample2];
+
+        spectrum[sample1] = 0.5*(even + Q(sample1, spectrumSize)*odd);
+        spectrum[sample2] = 0.5*(even + Q(sample2, spectrumSize)*odd);
+    }
+}
+
 static Signal ifft(Signal const& spectrum)
 {
     size_t const N = spectrum.size();
     Signal result(N);
 
-    for (size_t i = 0; i != N/2; ++i) {
-        result[2*i] = spectrum[i];
-        result[2*i+1] = spectrum[N/2+i];
+    for (size_t i = 0; i != N; ++i) {
+        result[i] = spectrum[reverse_bits(i, N)];
     }
 
     size_t sample_count = 2;
@@ -161,17 +174,7 @@ static Signal ifft(Signal const& spectrum)
         assert(transform_count*sample_count == N);
 
         for (size_t transform = 0; transform != transform_count; ++transform) {
-            for (size_t sample = 0; sample != sample_count/2; ++sample) {
-                size_t offset = transform*sample_count;
-                size_t sample1 = sample;
-                size_t sample2 = sample + sample_count/2;
-
-                Complex even = result[offset+sample1];
-                Complex odd = result[offset+sample2];
-
-                result[offset+sample1] = 1/2.0*(even + Q(sample1, sample_count)*odd);
-                result[offset+sample2] = 1/2.0*(even + Q(sample2, sample_count)*odd);
-            }
+            ifft_step(&result[transform*sample_count], sample_count);
         }
 
         transform_count >>= 1;
