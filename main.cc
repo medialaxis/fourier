@@ -416,16 +416,18 @@ static void run_opencl()
     cl_device_id device = get_device(platform, "GeForce GTX 550 Ti");
 
     cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties) platform, 0 };
-    cl_context context = clCreateContext(
-            properties,
-            1,
-            &device,
-            notify,
-            NULL,
-            NULL);
-
+    cl_context context = clCreateContext(properties, 1, &device, notify, NULL, NULL);
     if (0 == context) {
         fatal("Could not create contex.");
+    }
+
+    cl_command_queue queue = clCreateCommandQueue(context, device, 0, NULL);
+    if (0 == queue) {
+        fatal("Could not create command queue.");
+    }
+
+    if (clReleaseCommandQueue(queue) != CL_SUCCESS) {
+        fatal("Could not release command queue.");
     }
 
     if (clReleaseContext(context) != CL_SUCCESS) {
