@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <cmath>
 #include <complex>
+#include <map>
 #include <iostream>
 #include <random>
 #include <boost/noncopyable.hpp>
+#include <CL/opencl.h>
 
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> Signal;
@@ -274,6 +276,163 @@ static Signal random_signal(size_t size)
     return result;
 }
 
+static void notify(char const* errinfo, void const* private_info, size_t cb, void* user_data) __attribute__((unused));
+static void notify(char const* errinfo, void const* private_info, size_t cb, void* user_data)
+{
+    std::cout << "OpenCL error: " << errinfo << "\n";
+}
+
+static void fatal(std::string const& msg) __attribute__((noreturn));
+static void fatal(std::string const& msg)
+{
+    std::cout << "ERROR: " << msg << "\n";
+    abort();
+}
+
+static std::string error_code_to_string(cl_int ec) __attribute__((unused));
+static std::string error_code_to_string(cl_int ec)
+{
+    switch (ec) {
+        case CL_SUCCESS: return "CL_SUCCESS";
+        case CL_INVALID_DEVICE: return "CL_INVALID_DEVICE";
+        case CL_INVALID_VALUE: return "CL_INVALID_VALUE";
+        default: return "<UNKNOWN>";
+    }
+}
+
+static std::map<cl_platform_id, std::pair<std::string, std::string>> get_platforms()
+{
+    std::map<cl_platform_id, std::pair<std::string, std::string>> result;
+
+    std::vector<cl_platform_id> platforms(16);
+    cl_uint platform_count;
+    if (clGetPlatformIDs(platforms.size(), &platforms[0], &platform_count) != CL_SUCCESS) {
+        fatal("Could not get platform IDs.");
+    }
+    platforms.resize(platform_count);
+
+    for (auto& platform_id : platforms) {
+        std::vector<char> platformName(64);
+        if (clGetPlatformInfo(
+                    platform_id,
+                    CL_PLATFORM_NAME,
+                    platformName.size(),
+                    &platformName[0],
+                    NULL) != CL_SUCCESS) {
+            fatal("Could not get platform name.");
+        }
+
+        std::vector<char> platformVersion(64);
+        if (clGetPlatformInfo(
+                    platform_id,
+                    CL_PLATFORM_VERSION,
+                    platformVersion.size(),
+                    &platformVersion[0],
+                    NULL) != CL_SUCCESS) {
+            fatal("Could not get platform version.");
+        }
+
+        result[platform_id] = std::make_pair(&platformName[0], &platformVersion[0]);
+    }
+
+    return result;
+}
+
+static std::map<cl_device_id, std::string> get_devices(cl_platform_id platform)
+{
+    std::map<cl_device_id, std::string> result;
+
+    std::vector<cl_device_id> devices(16);
+    cl_uint device_count;
+    if (clGetDeviceIDs(
+                platform,
+                CL_DEVICE_TYPE_ALL,
+                devices.size(),
+                &devices[0],
+                &device_count) != CL_SUCCESS) {
+        fatal("Could not get device IDs.");
+    }
+    devices.resize(device_count);
+
+    for (auto& device_id : devices) {
+        std::vector<char> name(64);
+        if (clGetDeviceInfo(
+                device_id,
+                CL_DEVICE_NAME,
+                name.size(),
+                &name[0],
+                NULL) != CL_SUCCESS) {
+            fatal("Could not get device name.");
+        }
+
+        result[device_id] = &name[0];
+    }
+
+    return result;
+}
+
+static void print_platforms()
+{
+    for (auto& platform : get_platforms()) {
+        std::cout
+            << platform.first
+            << ": name='" << platform.second.first
+            << "', version='" << platform.second.second
+            << "'\n";
+
+        for (auto& device : get_devices(platform.first)) {
+            std::cout
+                << "  "
+                << device.first
+                << ": name='" << device.second
+                << "'\n";
+        }
+    }
+}
+
+static cl_platform_id get_platform(std::string const& name)
+{
+    for (auto& platform : get_platforms()) {
+        if (platform.second.first == name) return platform.first;
+    }
+
+    fatal("Could not find platform.");
+}
+
+static cl_device_id get_device(cl_platform_id platform, std::string const& name)
+{
+    for (auto& device : get_devices(platform)) {
+        if (device.second == name) return device.first;
+    }
+
+    fatal("Could not find device.");
+}
+
+static void run_opencl()
+{
+    print_platforms();
+
+    cl_platform_id platform = get_platform("NVIDIA CUDA");
+    cl_device_id device = get_device(platform, "GeForce GTX 550 Ti");
+
+    cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties) platform, 0 };
+    cl_context context = clCreateContext(
+            properties,
+            1,
+            &device,
+            notify,
+            NULL,
+            NULL);
+
+    if (0 == context) {
+        fatal("Could not create contex.");
+    }
+
+    if (clReleaseContext(context) != CL_SUCCESS) {
+        fatal("Could not release context.");
+    }
+}
+
 int main()
 {
     TEST_RESIDUE(prop_inverse_dft(Signal(1024, 1)));
@@ -291,6 +450,8 @@ int main()
     TEST_RESIDUE(prop_fft_is_decomposed_dft(random_signal(1024)));
     TEST(prop_reverse_bits(0xAA, 0x100, 0x55));
     TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
+
+    run_opencl();
 
     return 0;
 }
