@@ -436,14 +436,10 @@ static void run_opencl()
 
     cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties) platform, 0 };
     cl_context context = clCreateContext(properties, 1, &device, notify, NULL, NULL);
-    if (0 == context) {
-        fatal("Could not create contex.");
-    }
+    if (0 == context) fatal("Could not create contex.");
 
     cl_command_queue queue = clCreateCommandQueue(context, device, 0, NULL);
-    if (0 == queue) {
-        fatal("Could not create command queue.");
-    }
+    if (0 == queue) fatal("Could not create command queue.");
 
     std::vector<std::vector<char>> sources;
     sources.push_back(read_program("fourier.cl"));
@@ -459,9 +455,7 @@ static void run_opencl()
             &sourcesRaw[0],
             NULL,
             NULL);
-    if (program == NULL) {
-        fatal("Could not create program.");
-    }
+    if (program == NULL) fatal("Could not create program.");
 
     if (clBuildProgram(
                 program,
@@ -489,21 +483,10 @@ static void run_opencl()
         fatal("Could not build program.");
     }
 
-    if (clReleaseProgram(program) != CL_SUCCESS) {
-        fatal("Could not release program");
-    }
-
-    if (clUnloadCompiler() != CL_SUCCESS) {
-        fatal("Could not unload compiler.");
-    }
-
-    if (clReleaseCommandQueue(queue) != CL_SUCCESS) {
-        fatal("Could not release command queue.");
-    }
-
-    if (clReleaseContext(context) != CL_SUCCESS) {
-        fatal("Could not release context.");
-    }
+    if (clReleaseProgram(program) != CL_SUCCESS) fatal("Could not release program");
+    if (clUnloadCompiler() != CL_SUCCESS) fatal("Could not unload compiler.");
+    if (clReleaseCommandQueue(queue) != CL_SUCCESS) fatal("Could not release command queue.");
+    if (clReleaseContext(context) != CL_SUCCESS) fatal("Could not release context.");
 }
 
 int main()
