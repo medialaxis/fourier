@@ -467,6 +467,10 @@ static void run_opencl()
         fatal("Could not release program");
     }
 
+    if (clUnloadCompiler() != CL_SUCCESS) {
+        fatal("Could not unload compiler.");
+    }
+
     if (clReleaseCommandQueue(queue) != CL_SUCCESS) {
         fatal("Could not release command queue.");
     }
