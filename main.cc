@@ -416,9 +416,9 @@ static std::vector<char> read_program(std::string const& name)
         fatal("Could not read file: " + name);
     }
 
-    f.seekg(std::ios_base::end);
+    f.seekg(0, std::ios_base::end);
     size_t size = f.tellg();
-    f.seekg(std::ios_base::beg);
+    f.seekg(0, std::ios_base::beg);
 
     std::vector<char> result(size);
 
@@ -461,6 +461,32 @@ static void run_opencl()
             NULL);
     if (program == NULL) {
         fatal("Could not create program.");
+    }
+
+    if (clBuildProgram(
+                program,
+                1,
+                &device,
+                "",
+                NULL,
+                NULL) != CL_SUCCESS) {
+        std::vector<char> buildLog(1024);
+        size_t buildLogSize;
+        if (clGetProgramBuildInfo(
+                    program,
+                    device,
+                    CL_PROGRAM_BUILD_LOG,
+                    buildLog.size(),
+                    &buildLog[0],
+                    &buildLogSize)
+                != CL_SUCCESS) {
+            fatal("Could not get program build info.");
+        }
+        buildLog.resize(buildLogSize);
+
+        std::cout << &buildLog[0];
+
+        fatal("Could not build program.");
     }
 
     if (clReleaseProgram(program) != CL_SUCCESS) {
