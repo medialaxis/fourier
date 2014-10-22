@@ -5,6 +5,7 @@
 #include <complex>
 #include <map>
 #include <iostream>
+#include <fstream>
 #include <random>
 #include <boost/noncopyable.hpp>
 #include <CL/opencl.h>
@@ -408,6 +409,24 @@ static cl_device_id get_device(cl_platform_id platform, std::string const& name)
     fatal("Could not find device.");
 }
 
+static std::vector<char> read_program(std::string const& name)
+{
+    std::fstream f(name);
+    if (!f) {
+        fatal("Could not read file: " + name);
+    }
+
+    f.seekg(std::ios_base::end);
+    size_t size = f.tellg();
+    f.seekg(std::ios_base::beg);
+
+    std::vector<char> result(size);
+
+    f.read(&result[0], result.size());
+    result.push_back(0);
+    return result;
+}
+
 static void run_opencl()
 {
     print_platforms();
@@ -424,6 +443,28 @@ static void run_opencl()
     cl_command_queue queue = clCreateCommandQueue(context, device, 0, NULL);
     if (0 == queue) {
         fatal("Could not create command queue.");
+    }
+
+    std::vector<std::vector<char>> sources;
+    sources.push_back(read_program("fourier.cl"));
+
+    std::vector<char const*> sourcesRaw;
+    for (auto& source : sources) {
+        sourcesRaw.push_back(&source[0]);
+    }
+
+    cl_program program = clCreateProgramWithSource(
+            context,
+            sourcesRaw.size(),
+            &sourcesRaw[0],
+            NULL,
+            NULL);
+    if (program == NULL) {
+        fatal("Could not create program.");
+    }
+
+    if (clReleaseProgram(program) != CL_SUCCESS) {
+        fatal("Could not release program");
     }
 
     if (clReleaseCommandQueue(queue) != CL_SUCCESS) {
