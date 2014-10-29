@@ -9,6 +9,7 @@
 #include <random>
 #include <boost/noncopyable.hpp>
 #include <CL/opencl.h>
+#include <iomanip>
 
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> Signal;
@@ -489,6 +490,22 @@ static void run_opencl()
     if (clReleaseContext(context) != CL_SUCCESS) fatal("Could not release context.");
 }
 
+static void print_reverse_bits_table() __attribute((unused));
+static void print_reverse_bits_table()
+{
+    std::stringstream ss;
+
+    for (size_t row = 0; row != 16; ++row) {
+        for (size_t column = 0; column != 16; ++column) {
+            ss << std::hex << std::setw(2) << std::setfill('0');
+            ss << reverse_bits(row*16+column, 256) << " ";
+        }
+        ss << "\n";
+    }
+
+    std::cout << ss.str();
+}
+
 int main()
 {
     TEST_RESIDUE(prop_inverse_dft(Signal(1024, 1)));
@@ -507,6 +524,7 @@ int main()
     TEST(prop_reverse_bits(0xAA, 0x100, 0x55));
     TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
 
+//    print_reverse_bits_table();
     run_opencl();
 
     return 0;
