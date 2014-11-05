@@ -17,6 +17,11 @@ typedef std::vector<Complex> Signal;
 static const double eps = 0.01;
 static const Complex i(0, 1);
 
+static bool operator==(cl_float2 a, cl_float2 b)
+{
+    return a.s[0] == b.s[0] && a.s[1] == b.s[1];
+}
+
 static size_t reverse_bits(size_t n, size_t max)
 {
     size_t result = 0;
@@ -295,9 +300,25 @@ static std::string error_code_to_string(cl_int ec) __attribute__((unused));
 static std::string error_code_to_string(cl_int ec)
 {
     switch (ec) {
-        case CL_SUCCESS: return "CL_SUCCESS";
+        case CL_INVALID_COMMAND_QUEUE: return "CL_INVALID_COMMAND_QUEUE";
+        case CL_INVALID_CONTEXT: return "CL_INVALID_CONTEXT";
         case CL_INVALID_DEVICE: return "CL_INVALID_DEVICE";
+        case CL_INVALID_EVENT_WAIT_LIST: return "CL_INVALID_EVENT_WAIT_LIST";
+        case CL_INVALID_GLOBAL_OFFSET: return "CL_INVALID_GLOBAL_OFFSET";
+        case CL_INVALID_GLOBAL_WORK_SIZE: return "CL_INVALID_GLOBAL_WORK_SIZE";
+        case CL_INVALID_IMAGE_SIZE: return "CL_INVALID_IMAGE_SIZE";
+        case CL_INVALID_KERNEL_ARGS: return "CL_INVALID_KERNEL_ARGS";
+        case CL_INVALID_KERNEL: return "CL_INVALID_KERNEL";
+        case CL_INVALID_PROGRAM_EXECUTABLE: return "CL_INVALID_PROGRAM_EXECUTABLE";
         case CL_INVALID_VALUE: return "CL_INVALID_VALUE";
+        case CL_INVALID_WORK_DIMENSION: return "CL_INVALID_WORK_DIMENSION";
+        case CL_INVALID_WORK_GROUP_SIZE: return "CL_INVALID_WORK_GROUP_SIZE";
+        case CL_INVALID_WORK_ITEM_SIZE: return "CL_INVALID_WORK_ITEM_SIZE";
+        case CL_MEM_OBJECT_ALLOCATION_FAILURE: return "CL_MEM_OBJECT_ALLOCATION_FAILURE";
+        case CL_MISALIGNED_SUB_BUFFER_OFFSET: return "CL_MISALIGNED_SUB_BUFFER_OFFSET";
+        case CL_OUT_OF_HOST_MEMORY: return "CL_OUT_OF_HOST_MEMORY";
+        case CL_OUT_OF_RESOURCES: return "CL_OUT_OF_RESOURCES";
+        case CL_SUCCESS: return "CL_SUCCESS";
         default: return "<UNKNOWN>";
     }
 }
@@ -430,6 +451,8 @@ static std::vector<char> read_program(std::string const& name)
 
 static void run_opencl()
 {
+    cl_int ec;
+
     print_platforms();
 
     cl_platform_id platform = get_platform("NVIDIA CUDA");
@@ -445,15 +468,15 @@ static void run_opencl()
     std::vector<std::vector<char>> sources;
     sources.push_back(read_program("fourier.cl"));
 
-    std::vector<char const*> sourcesRaw;
+    std::vector<char const*> sources_raw;
     for (auto& source : sources) {
-        sourcesRaw.push_back(&source[0]);
+        sources_raw.push_back(&source[0]);
     }
 
     cl_program program = clCreateProgramWithSource(
             context,
-            sourcesRaw.size(),
-            &sourcesRaw[0],
+            sources_raw.size(),
+            &sources_raw[0],
             NULL,
             NULL);
     if (program == NULL) fatal("Could not create program.");
@@ -465,25 +488,146 @@ static void run_opencl()
                 "",
                 NULL,
                 NULL) != CL_SUCCESS) {
-        std::vector<char> buildLog(1024);
-        size_t buildLogSize;
+        std::vector<char> build_log(1024);
+        size_t build_log_size;
         if (clGetProgramBuildInfo(
                     program,
                     device,
                     CL_PROGRAM_BUILD_LOG,
-                    buildLog.size(),
-                    &buildLog[0],
-                    &buildLogSize)
+                    build_log.size(),
+                    &build_log[0],
+                    &build_log_size)
                 != CL_SUCCESS) {
             fatal("Could not get program build info.");
         }
-        buildLog.resize(buildLogSize);
+        build_log.resize(build_log_size);
 
-        std::cout << &buildLog[0];
+        std::cout << &build_log[0];
 
         fatal("Could not build program.");
     }
 
+    cl_kernel init_kernel = clCreateKernel(program, "fft_init", NULL);
+    if (init_kernel == NULL) fatal("Could not create init kernel.");
+
+    cl_kernel step_kernel = clCreateKernel(program, "fft_step", NULL);
+    if (step_kernel == NULL) fatal("Could not create step kernel.");
+
+    int exponent_n = 10;
+    cl_float2 dummy;
+    dummy.s[0] = 43;
+    dummy.s[1] = 37;
+    std::vector<cl_float2> x_buffer(1 << exponent_n, dummy);
+    size_t byte_count = x_buffer.size()*sizeof(cl_float2);
+
+    cl_mem x_mem = clCreateBuffer(
+            context,
+            CL_MEM_READ_ONLY,
+            byte_count,
+            NULL,
+            NULL);
+    if (x_mem == NULL) fatal("Could not create X buffer.");
+
+    cl_mem y1_mem = clCreateBuffer(
+            context,
+            CL_MEM_WRITE_ONLY,
+            byte_count,
+            NULL,
+            NULL);
+    if (y1_mem == NULL) fatal("Could not create Y1 buffer.");
+
+    cl_mem y2_mem = clCreateBuffer(
+            context,
+            CL_MEM_WRITE_ONLY,
+            byte_count,
+            NULL,
+            NULL);
+    if (y2_mem == NULL) fatal("Could not create Y2 buffer.");
+
+    if (clEnqueueWriteBuffer(
+                queue,
+                x_mem,
+                CL_TRUE,
+                0,
+                byte_count,
+                &x_buffer[0],
+                0,
+                NULL,
+                NULL) != CL_SUCCESS) {
+        fatal("Coule not write to X buffer.");
+    }
+
+    if (clSetKernelArg(
+                init_kernel,
+                0,
+                sizeof(x_mem),
+                &x_mem
+                ) != CL_SUCCESS) {
+        fatal("Could not set kernel argument 0.");
+    }
+
+    cl_uint exponent_n_arg = exponent_n;
+    if (clSetKernelArg(
+                init_kernel,
+                1,
+                sizeof(exponent_n_arg),
+                &exponent_n_arg
+                ) != CL_SUCCESS) {
+        fatal("Could not set kernel argument 1.");
+    }
+
+    if (clSetKernelArg(
+                init_kernel,
+                2,
+                sizeof(y1_mem),
+                &y1_mem
+                ) != CL_SUCCESS) {
+        fatal("Could not set kernel argument 2.");
+    }
+
+    size_t global_work_size = x_buffer.size();
+    ec = clEnqueueNDRangeKernel(
+                queue,
+                init_kernel,
+                1,
+                NULL,
+                &global_work_size,
+                NULL,
+                0,
+                NULL,
+                NULL);
+    if (ec != CL_SUCCESS) {
+        std::cout << error_code_to_string(ec) << "\n";
+        fatal("Could not enqueue kernel.");
+    }
+
+    std::vector<cl_float2> y1_buffer(x_buffer.size());
+    ec = clEnqueueReadBuffer(
+                queue,
+                y1_mem,
+                CL_TRUE,
+                0,
+                byte_count,
+                &y1_buffer[0],
+                0,
+                NULL,
+                NULL);
+    if (ec != CL_SUCCESS) {
+        std::cout << error_code_to_string(ec) << "\n";
+        fatal("Could not read Y1 buffer.");
+    }
+
+    if (clFinish(queue) != CL_SUCCESS) fatal("Could not finish.");
+
+    if (x_buffer != y1_buffer) {
+        fatal("X buffer is not equal Y1 buffer.");
+    }
+
+    if (clReleaseMemObject(y2_mem) != CL_SUCCESS) fatal("Could not release Y2 buffer.");
+    if (clReleaseMemObject(y1_mem) != CL_SUCCESS) fatal("Could not release Y1 buffer.");
+    if (clReleaseMemObject(x_mem) != CL_SUCCESS) fatal("Could not release X buffer.");
+    if (clReleaseKernel(step_kernel) != CL_SUCCESS) fatal("Could not release step kernel.");
+    if (clReleaseKernel(init_kernel) != CL_SUCCESS) fatal("Could not release init kernel.");
     if (clReleaseProgram(program) != CL_SUCCESS) fatal("Could not release program");
     if (clUnloadCompiler() != CL_SUCCESS) fatal("Could not unload compiler.");
     if (clReleaseCommandQueue(queue) != CL_SUCCESS) fatal("Could not release command queue.");

@@ -21,7 +21,7 @@ uchar constant reverse_bits_uchar[256] = {
     0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef, 0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
 };
 
-static uint reverse_bits_uint(uint n)
+static uint reverse_bits_uint(uint n, uint exponent)
 {
     // Decompose.
     uchar b3 = (n >> 24) & 0xFF;
@@ -36,7 +36,9 @@ static uint reverse_bits_uint(uint n)
     b0 = reverse_bits_uchar[b0];
 
     // Compose.
-    return (uint) b0 << 24 | (uint) b1 << 16 | (uint) b2 << 8 | (uint) b3;
+    uint reversed = (uint) b0 << 24 | (uint) b1 << 16 | (uint) b2 << 8 | (uint) b3;
+
+    return reversed >> (32 - exponent);
 }
 
 static uint index(uint n, uint B, uint k)
@@ -55,10 +57,10 @@ static Complex mult(Complex a, Complex b)
     return (Complex)(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
 
-kernel void fft_init(Complex global const* X, uint N, Complex global* X_)
+kernel void fft_init(Complex global const* X, uint exponent_n, Complex global* Y)
 {
     uint i = get_global_id(0);
-    X_[i] = X[reverse_bits_uint(i)];
+    Y[i] = X[reverse_bits_uint(i, exponent_n)];
 }
 
 kernel void fft_step(Complex global const* Y, uint B, Complex global* Y_)
