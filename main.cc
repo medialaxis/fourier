@@ -601,10 +601,60 @@ static void run_opencl()
         fatal("Could not enqueue kernel.");
     }
 
+    cl_mem y_old_mem = y1_mem;
+    cl_mem y_new_mem = y2_mem;
+    cl_uint B = 2;
+    while (B != x_buffer.size()) {
+        if (clSetKernelArg(
+                    step_kernel,
+                    0,
+                    sizeof(y_old_mem),
+                    &y_old_mem
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 0.");
+        }
+
+        if (clSetKernelArg(
+                    step_kernel,
+                    1,
+                    sizeof(B),
+                    &B
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 1.");
+        }
+
+        if (clSetKernelArg(
+                    step_kernel,
+                    2,
+                    sizeof(y_new_mem),
+                    &y_new_mem
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 2.");
+        }
+
+        ec = clEnqueueNDRangeKernel(
+                queue,
+                step_kernel,
+                1,
+                NULL,
+                &global_work_size,
+                NULL,
+                0,
+                NULL,
+                NULL);
+        if (ec != CL_SUCCESS) {
+            std::cout << error_code_to_string(ec) << "\n";
+            fatal("Could not enqueue kernel.");
+        }
+
+        std::swap(y_old_mem, y_new_mem);
+        B <<= 1;
+    }
+
     std::vector<cl_float2> y1_buffer(x_buffer.size());
     ec = clEnqueueReadBuffer(
                 queue,
-                y1_mem,
+                y_old_mem,
                 CL_TRUE,
                 0,
                 byte_count,
