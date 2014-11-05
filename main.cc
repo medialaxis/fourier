@@ -11,7 +11,7 @@
 #include <CL/opencl.h>
 #include <iomanip>
 
-typedef double Float;
+typedef float Float;
 typedef std::complex<Float> Complex;
 typedef std::vector<Complex> Signal;
 
@@ -194,10 +194,11 @@ static Signal ifft(Signal const& spectrum)
     return result;
 }
 
+// RMS of error signal.
 static Float error(Signal const& a, Signal const& b)
 {
     auto e = a - b;
-    return sqrt(std::real(dot(e, e)));
+    return sqrt(std::real(dot(e, e))/e.size());
 }
 
 static Float prop_inverse_dft(Signal const& test_signal)
