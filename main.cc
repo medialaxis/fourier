@@ -11,10 +11,11 @@
 #include <CL/opencl.h>
 #include <iomanip>
 
-typedef std::complex<double> Complex;
+typedef double Float;
+typedef std::complex<Float> Complex;
 typedef std::vector<Complex> Signal;
 
-static const double eps = 0.01;
+static const Float eps = 0.01;
 static const Complex i(0, 1);
 
 static bool operator==(cl_float2 a, cl_float2 b)
@@ -71,7 +72,7 @@ static Signal dft(Signal const& signal)
         Complex c(0, 0);
 
         for (size_t n = 0; n != signal.size(); ++n) {
-            c += signal[n]*exp(-i*2.0*M_PI*(double) k*(double) n/(double) signal.size());
+            c += signal[n]*exp(-i*(Float) 2.0*(Float) M_PI*(Float) k*(Float) n/(Float) signal.size());
         }
 
         result[k] = c;
@@ -88,10 +89,10 @@ static Signal idft(Signal const& spectrum)
         Complex c(0, 0);
 
         for (size_t k = 0; k != spectrum.size(); ++k) {
-            c += spectrum[k]*exp(i*2.0*M_PI*(double) k*(double) n/(double) spectrum.size());
+            c += spectrum[k]*exp(i*(Float) 2.0*(Float) M_PI*(Float) k*(Float) n/(Float) spectrum.size());
         }
 
-        result[n] = c/(double) spectrum.size();
+        result[n] = c/(Float) spectrum.size();
     }
 
     return result;
@@ -99,12 +100,12 @@ static Signal idft(Signal const& spectrum)
 
 static inline Complex W(int k, int N)
 {
-    return exp(-i*2.0*M_PI*(double) k/(double) N);
+    return exp(-i*(Float) 2.0*(Float) M_PI*(Float) k/(Float) N);
 }
 
 static inline Complex Q(int n, int N)
 {
-    return exp(i*2.0*M_PI*(double) n/(double) N);
+    return exp(i*(Float) 2.0*(Float) M_PI*(Float) n/(Float) N);
 }
 
 static void fft_step(Complex* spectrum, size_t spectrumSize)
@@ -163,8 +164,8 @@ static void ifft_step(Complex* spectrum, size_t spectrumSize)
         Complex even = spectrum[sample1];
         Complex odd = spectrum[sample2];
 
-        spectrum[sample1] = 0.5*(even + Q(sample1, spectrumSize)*odd);
-        spectrum[sample2] = 0.5*(even + Q(sample2, spectrumSize)*odd);
+        spectrum[sample1] = (Float) 0.5*(even + Q(sample1, spectrumSize)*odd);
+        spectrum[sample2] = (Float) 0.5*(even + Q(sample2, spectrumSize)*odd);
     }
 }
 
@@ -193,33 +194,33 @@ static Signal ifft(Signal const& spectrum)
     return result;
 }
 
-static double error(Signal const& a, Signal const& b)
+static Float error(Signal const& a, Signal const& b)
 {
     auto e = a - b;
     return sqrt(std::real(dot(e, e)));
 }
 
-static double prop_inverse_dft(Signal const& test_signal)
+static Float prop_inverse_dft(Signal const& test_signal)
 {
     return error(test_signal, idft(dft(test_signal)));
 }
 
-static double prop_inverse_fft(Signal const& test_signal)
+static Float prop_inverse_fft(Signal const& test_signal)
 {
     return error(test_signal, ifft(fft(test_signal)));
 }
 
-static double prop_dft_equal_fft(Signal const& test_signal)
+static Float prop_dft_equal_fft(Signal const& test_signal)
 {
     return error(dft(test_signal), fft(test_signal));
 }
 
-static double prop_idft_equal_ifft(Signal const& test_signal)
+static Float prop_idft_equal_ifft(Signal const& test_signal)
 {
     return error(idft(test_signal), ifft(test_signal));
 }
 
-static double prop_fft_is_decomposed_dft(Signal const& test_signal)
+static Float prop_fft_is_decomposed_dft(Signal const& test_signal)
 {
     Signal even_samples;
     Signal odd_samples;
@@ -249,7 +250,7 @@ static bool prop_reverse_bits(size_t n, size_t max, size_t correct)
 
 #define TEST_RESIDUE(signal) test_residue(#signal, signal)
 
-static void test_residue(const char* test_name, double residue)
+static void test_residue(const char* test_name, Float residue)
 {
     if (residue < eps) {
         std::cout << test_name << ": PASS: residue=" << residue << std::endl;
@@ -274,7 +275,7 @@ static void test(const char* test_name, bool result)
 static Signal random_signal(size_t size)
 {
     std::default_random_engine generator(0);
-    std::uniform_real_distribution<double> distribution(0.0, 1.0);
+    std::uniform_real_distribution<Float> distribution(0.0, 1.0);
 
     Signal result(size);
     for (size_t i = 0; i != result.size(); ++i) {
