@@ -456,14 +456,233 @@ static std::vector<char> read_program(std::string const& name)
     return result;
 }
 
-static void fftcl_init(Complex* dst, Complex const* src, size_t N)
+class Fourier : private boost::noncopyable
 {
-}
+public:
+    explicit Fourier(size_t sample_power)
+        : m_sample_power(sample_power)
+    {
+        print_platforms();
+
+        cl_platform_id platform = get_platform("NVIDIA CUDA");
+        cl_device_id device = get_device(platform, "GeForce GTX 550 Ti");
+
+        cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties) platform, 0 };
+        m_context = clCreateContext(properties, 1, &device, notify, NULL, NULL);
+        if (0 == m_context) fatal("Could not create contex.");
+
+        m_queue = clCreateCommandQueue(m_context, device, 0, NULL);
+        if (0 == m_queue) fatal("Could not create command queue.");
+
+        std::vector<std::vector<char>> sources;
+        sources.push_back(read_program("fourier.cl"));
+
+        std::vector<char const*> sources_raw;
+        for (auto& source : sources) {
+            sources_raw.push_back(&source[0]);
+        }
+
+        m_program = clCreateProgramWithSource(
+                m_context,
+                sources_raw.size(),
+                &sources_raw[0],
+                NULL,
+                NULL);
+        if (m_program == NULL) fatal("Could not create program.");
+
+        if (clBuildProgram(
+                    m_program,
+                    1,
+                    &device,
+                    "",
+                    NULL,
+                    NULL) != CL_SUCCESS) {
+            std::vector<char> build_log(1024);
+            size_t build_log_size;
+            if (clGetProgramBuildInfo(
+                        m_program,
+                        device,
+                        CL_PROGRAM_BUILD_LOG,
+                        build_log.size(),
+                        &build_log[0],
+                        &build_log_size)
+                    != CL_SUCCESS) {
+                fatal("Could not get program build info.");
+            }
+            build_log.resize(build_log_size);
+
+            std::cout << &build_log[0];
+
+            fatal("Could not build program.");
+        }
+
+        m_init_kernel = clCreateKernel(m_program, "fft_init", NULL);
+        if (m_init_kernel == NULL) fatal("Could not create init kernel.");
+
+        m_step_kernel = clCreateKernel(m_program, "fft_step", NULL);
+        if (m_step_kernel == NULL) fatal("Could not create step kernel.");
+
+        m_x_mem = clCreateBuffer(
+                m_context,
+                CL_MEM_READ_ONLY,
+                byte_count(),
+                NULL,
+                NULL);
+        if (m_x_mem == NULL) fatal("Could not create X buffer.");
+
+        m_y1_mem = clCreateBuffer(
+                m_context,
+                CL_MEM_WRITE_ONLY,
+                byte_count(),
+                NULL,
+                NULL);
+        if (m_y1_mem == NULL) fatal("Could not create Y1 buffer.");
+
+        m_y2_mem = clCreateBuffer(
+                m_context,
+                CL_MEM_WRITE_ONLY,
+                byte_count(),
+                NULL,
+                NULL);
+        if (m_y2_mem == NULL) fatal("Could not create Y2 buffer.");
+    }
+
+    ~Fourier()
+    {
+        if (clReleaseMemObject(m_y2_mem) != CL_SUCCESS) fatal("Could not release Y2 buffer.");
+        if (clReleaseMemObject(m_y1_mem) != CL_SUCCESS) fatal("Could not release Y1 buffer.");
+        if (clReleaseMemObject(m_x_mem) != CL_SUCCESS) fatal("Could not release X buffer.");
+        if (clReleaseKernel(m_step_kernel) != CL_SUCCESS) fatal("Could not release step kernel.");
+        if (clReleaseKernel(m_init_kernel) != CL_SUCCESS) fatal("Could not release init kernel.");
+        if (clReleaseProgram(m_program) != CL_SUCCESS) fatal("Could not release program");
+        if (clUnloadCompiler() != CL_SUCCESS) fatal("Could not unload compiler.");
+        if (clReleaseCommandQueue(m_queue) != CL_SUCCESS) fatal("Could not release command queue.");
+        if (clReleaseContext(m_context) != CL_SUCCESS) fatal("Could not release context.");
+    }
+
+    void init(Complex* dst, Complex const* src)
+    {
+        cl_int ec;
+
+        std::vector<cl_float2> x_buffer(sample_count());
+
+        for (size_t i = 0; i != sample_count(); ++i) {
+            x_buffer[i].s[0] = std::real(src[i]);
+            x_buffer[i].s[1] = std::imag(src[i]);
+        }
+
+        if (clEnqueueWriteBuffer(
+                    m_queue,
+                    m_x_mem,
+                    CL_TRUE,
+                    0,
+                    byte_count(),
+                    &x_buffer[0],
+                    0,
+                    NULL,
+                    NULL) != CL_SUCCESS) {
+            fatal("Coule not write to X buffer.");
+        }
+
+        if (clSetKernelArg(
+                    m_init_kernel,
+                    0,
+                    sizeof(m_x_mem),
+                    &m_x_mem
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 0.");
+        }
+
+        cl_uint exponent_n_arg = m_sample_power;
+        if (clSetKernelArg(
+                    m_init_kernel,
+                    1,
+                    sizeof(exponent_n_arg),
+                    &exponent_n_arg
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 1.");
+        }
+
+        if (clSetKernelArg(
+                    m_init_kernel,
+                    2,
+                    sizeof(m_y1_mem),
+                    &m_y1_mem
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 2.");
+        }
+
+        size_t global_work_size = x_buffer.size();
+        ec = clEnqueueNDRangeKernel(
+                m_queue,
+                m_init_kernel,
+                1,
+                NULL,
+                &global_work_size,
+                NULL,
+                0,
+                NULL,
+                NULL);
+        if (ec != CL_SUCCESS) {
+            std::cout << error_code_to_string(ec) << "\n";
+            fatal("Could not enqueue kernel.");
+        }
+
+        std::vector<cl_float2> y1_buffer(x_buffer.size());
+        ec = clEnqueueReadBuffer(
+                m_queue,
+                m_y1_mem,
+                CL_TRUE,
+                0,
+                byte_count(),
+                &y1_buffer[0],
+                0,
+                NULL,
+                NULL);
+        if (ec != CL_SUCCESS) {
+            std::cout << error_code_to_string(ec) << "\n";
+            fatal("Could not read Y1 buffer.");
+        }
+
+        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
+
+        for (size_t i = 0; i != sample_count(); ++i) {
+            dst[i] = Complex(y1_buffer[i].s[0], y1_buffer[i].s[1]);
+        }
+    }
+
+    void step(Complex* dst, Complex const* src, size_t N)
+    {
+    }
+
+    size_t byte_count() const
+    {
+        return sample_count()*sizeof(cl_float2);
+    }
+
+    size_t sample_count() const
+    {
+        return 1 << m_sample_power;
+    }
+
+private:
+    size_t m_sample_power;
+    cl_mem m_y2_mem;
+    cl_mem m_y1_mem;
+    cl_mem m_x_mem;
+    cl_kernel m_step_kernel;
+    cl_kernel m_init_kernel;
+    cl_program m_program;
+    cl_command_queue m_queue;
+    cl_context m_context;
+};
 
 static void fftcl_step(Complex* dst, Complex const* src, size_t N)
 {
 }
 
+// FIXME: remove this
+static void run_opencl() __attribute__((unused));
 static void run_opencl()
 {
     cl_int ec;
@@ -715,13 +934,15 @@ static void print_reverse_bits_table()
     std::cout << ss.str();
 }
 
-static Float prop_fftcl_init_equals_fft_init(Signal const& signal)
+static Float prop_fftcl_init_equals_fft_init(Fourier& fourier, Signal const& signal)
 {
+    assert(fourier.sample_count() == signal.size());
+
     Signal expected(signal.size());
     fft_init(&expected[0], &signal[0], expected.size());
 
     Signal actual(signal.size());
-    fftcl_init(&actual[0], &signal[0], actual.size());
+    fourier.init(&actual[0], &signal[0]);
 
     return error(expected, actual);
 }
@@ -739,6 +960,8 @@ static Float prop_fftcl_step_equals_fft_step(Signal const& signal)
 
 int main()
 {
+    Fourier fourier(10);
+
     TEST_RESIDUE(prop_inverse_dft(Signal(1024, 1)));
     TEST_RESIDUE(prop_inverse_dft(random_signal(1024)));
     TEST_RESIDUE(prop_inverse_fft(Signal(2, 1)));
@@ -754,11 +977,11 @@ int main()
     TEST_RESIDUE(prop_fft_is_decomposed_dft(random_signal(1024)));
     TEST(prop_reverse_bits(0xAA, 0x100, 0x55));
     TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
-    TEST_RESIDUE(prop_fftcl_init_equals_fft_init(random_signal(1024)));
+    TEST_RESIDUE(prop_fftcl_init_equals_fft_init(fourier, random_signal(1024)));
     TEST_RESIDUE(prop_fftcl_step_equals_fft_step(random_signal(1024)));
 
 //    print_reverse_bits_table();
-    run_opencl();
+//    run_opencl();
 
     return 0;
 }
