@@ -607,33 +607,9 @@ public:
 
         load(m_x_mem, x_buffer);
 
-        if (clSetKernelArg(
-                    m_init_kernel,
-                    0,
-                    sizeof(m_x_mem),
-                    &m_x_mem
-                    ) != CL_SUCCESS) {
-            fatal("Could not set kernel argument 0.");
-        }
-
-        cl_uint exponent_n_arg = m_sample_power;
-        if (clSetKernelArg(
-                    m_init_kernel,
-                    1,
-                    sizeof(exponent_n_arg),
-                    &exponent_n_arg
-                    ) != CL_SUCCESS) {
-            fatal("Could not set kernel argument 1.");
-        }
-
-        if (clSetKernelArg(
-                    m_init_kernel,
-                    2,
-                    sizeof(m_y1_mem),
-                    &m_y1_mem
-                    ) != CL_SUCCESS) {
-            fatal("Could not set kernel argument 2.");
-        }
+        set_arg(m_init_kernel, 0, m_x_mem);
+        set_arg(m_init_kernel, 1, m_sample_power);
+        set_arg(m_init_kernel, 2, m_y1_mem);
 
         size_t global_work_size = x_buffer.size();
         ec = clEnqueueNDRangeKernel(
@@ -667,33 +643,9 @@ public:
 
         load(m_y1_mem, y1_buffer);
 
-        if (clSetKernelArg(
-                    m_step_kernel,
-                    0,
-                    sizeof(m_y1_mem),
-                    &m_y1_mem
-                    ) != CL_SUCCESS) {
-            fatal("Could not set kernel argument 0.");
-        }
-
-        cl_uint b = B;
-        if (clSetKernelArg(
-                    m_step_kernel,
-                    1,
-                    sizeof(b),
-                    &b
-                    ) != CL_SUCCESS) {
-            fatal("Could not set kernel argument 1.");
-        }
-
-        if (clSetKernelArg(
-                    m_step_kernel,
-                    2,
-                    sizeof(m_y2_mem),
-                    &m_y2_mem
-                    ) != CL_SUCCESS) {
-            fatal("Could not set kernel argument 2.");
-        }
+        set_arg(m_step_kernel, 0, m_y1_mem);
+        set_arg(m_step_kernel, 1, B);
+        set_arg(m_step_kernel, 2, m_y2_mem);
 
         size_t global_work_size = sample_count();
         ec = clEnqueueNDRangeKernel(
@@ -717,6 +669,30 @@ public:
         if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
 
         convert(dst, y2_buffer);
+    }
+
+    void set_arg(cl_kernel kernel, cl_uint arg_index, cl_uint arg)
+    {
+        if (clSetKernelArg(
+                    kernel,
+                    arg_index,
+                    sizeof(arg),
+                    &arg
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument.");
+        }
+    }
+
+    void set_arg(cl_kernel kernel, cl_uint arg_index, cl_mem arg)
+    {
+        if (clSetKernelArg(
+                    kernel,
+                    arg_index,
+                    sizeof(arg),
+                    &arg
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument.");
+        }
     }
 
     void load(cl_mem mem, std::vector<cl_float2> const& buffer)
