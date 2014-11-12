@@ -605,18 +605,7 @@ public:
 
         std::vector<cl_float2> x_buffer = to_float2_vector(src, sample_count());
 
-        if (clEnqueueWriteBuffer(
-                    m_queue,
-                    m_x_mem,
-                    CL_TRUE,
-                    0,
-                    byte_count(),
-                    &x_buffer[0],
-                    0,
-                    NULL,
-                    NULL) != CL_SUCCESS) {
-            fatal("Coule not write to X buffer.");
-        }
+        load(m_x_mem, x_buffer);
 
         if (clSetKernelArg(
                     m_init_kernel,
@@ -662,21 +651,8 @@ public:
             fatal("Could not enqueue kernel.");
         }
 
-        std::vector<cl_float2> y1_buffer(x_buffer.size());
-        ec = clEnqueueReadBuffer(
-                m_queue,
-                m_y1_mem,
-                CL_TRUE,
-                0,
-                byte_count(),
-                &y1_buffer[0],
-                0,
-                NULL,
-                NULL);
-        if (ec != CL_SUCCESS) {
-            std::cout << error_code_to_string(ec) << "\n";
-            fatal("Could not read Y1 buffer.");
-        }
+        std::vector<cl_float2> y1_buffer(sample_count());
+        store(&y1_buffer[0], m_y1_mem);
 
         if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
 
@@ -689,18 +665,7 @@ public:
 
         std::vector<cl_float2> y1_buffer = to_float2_vector(src, sample_count());
 
-        if (clEnqueueWriteBuffer(
-                    m_queue,
-                    m_y1_mem,
-                    CL_TRUE,
-                    0,
-                    byte_count(),
-                    &y1_buffer[0],
-                    0,
-                    NULL,
-                    NULL) != CL_SUCCESS) {
-            fatal("Coule not write to Y1 buffer.");
-        }
+        load(m_y1_mem, y1_buffer);
 
         if (clSetKernelArg(
                     m_step_kernel,
@@ -746,25 +711,50 @@ public:
             fatal("Could not enqueue kernel.");
         }
 
-        std::vector<cl_float2> y2_buffer(y1_buffer.size());
+        std::vector<cl_float2> y2_buffer(sample_count());
+        store(&y2_buffer[0], m_y2_mem);
+
+        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
+
+        convert(dst, y2_buffer);
+    }
+
+    void load(cl_mem mem, std::vector<cl_float2> const& buffer)
+    {
+        assert(buffer.size() == sample_count());
+
+        if (clEnqueueWriteBuffer(
+                    m_queue,
+                    mem,
+                    CL_TRUE,
+                    0,
+                    byte_count(),
+                    &buffer[0],
+                    0,
+                    NULL,
+                    NULL) != CL_SUCCESS) {
+            fatal("Coule not write to buffer.");
+        }
+    }
+
+    void store(cl_float2* buffer, cl_mem mem)
+    {
+        cl_int ec;
+
         ec = clEnqueueReadBuffer(
                 m_queue,
-                m_y2_mem,
+                mem,
                 CL_TRUE,
                 0,
                 byte_count(),
-                &y2_buffer[0],
+                buffer,
                 0,
                 NULL,
                 NULL);
         if (ec != CL_SUCCESS) {
             std::cout << error_code_to_string(ec) << "\n";
-            fatal("Could not read Y2 buffer.");
+            fatal("Could not read buffer.");
         }
-
-        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
-
-        convert(dst, y2_buffer);
     }
 
     size_t byte_count() const
