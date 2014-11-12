@@ -115,7 +115,7 @@ static void fft_init(Complex* dst, Complex const* src, size_t N)
     }
 }
 
-static void fft_step(Complex* spectrum, size_t spectrumSize)
+static void fft_step_spectrum(Complex* spectrum, size_t spectrumSize)
 {
     for (size_t i = 0; i != spectrumSize/2; ++i) {
         size_t sample1 = i;
@@ -126,6 +126,13 @@ static void fft_step(Complex* spectrum, size_t spectrumSize)
 
         spectrum[sample1] = even + W(sample1, spectrumSize)*odd;
         spectrum[sample2] = even + W(sample2, spectrumSize)*odd;
+    }
+}
+
+static void fft_step(Complex* spectrum, size_t transform_count, size_t sample_count)
+{
+    for (size_t transform = 0; transform != transform_count; ++transform) {
+        fft_step_spectrum(&spectrum[transform*sample_count], sample_count);
     }
 }
 
@@ -150,9 +157,7 @@ static Signal fft(Signal const& signal)
     while (transform_count >= 1) {
         size_t sample_count = N/transform_count;
 
-        for (size_t transform = 0; transform != transform_count; ++transform) {
-            fft_step(&result[transform*sample_count], sample_count);
-        }
+        fft_step(&result[0], transform_count, sample_count);
 
         transform_count >>= 1;
     }
@@ -244,7 +249,7 @@ static Float prop_fft_is_decomposed_dft(Signal const& test_signal)
     intermediate_spectrum.insert(intermediate_spectrum.end(), even_spectrum.begin(), even_spectrum.end());
     intermediate_spectrum.insert(intermediate_spectrum.end(), odd_spectrum.begin(), odd_spectrum.end());
 
-    fft_step(&intermediate_spectrum[0], intermediate_spectrum.size());
+    fft_step_spectrum(&intermediate_spectrum[0], intermediate_spectrum.size());
 
     return error(dft(test_signal), intermediate_spectrum);
 }
@@ -456,6 +461,40 @@ static std::vector<char> read_program(std::string const& name)
     return result;
 }
 
+void convert(cl_float2* dst, Complex const* src, size_t count)
+{
+    for (size_t i = 0; i != count; ++i) {
+        dst[i].s[0] = std::real(src[i]);
+        dst[i].s[1] = std::imag(src[i]);
+    }
+}
+
+void convert(Complex* dst, cl_float2 const* src, size_t count)
+{
+    for (size_t i = 0; i != count; ++i) {
+        dst[i] = Complex(src[i].s[0], src[i].s[1]);
+    }
+}
+
+void convert(Complex* dst, std::vector<cl_float2> const& src)
+{
+    convert(dst, &src[0], src.size());
+}
+
+std::vector<cl_float2> to_float2_vector(Complex const* vec, size_t count)
+{
+    std::vector<cl_float2> result(count);
+
+    convert(&result[0], vec, count);
+
+    return result;
+}
+
+std::vector<cl_float2> to_float2_vector(std::vector<Complex> const& vec)
+{
+    return to_float2_vector(&vec[0], vec.size());
+}
+
 class Fourier : private boost::noncopyable
 {
 public:
@@ -564,12 +603,7 @@ public:
     {
         cl_int ec;
 
-        std::vector<cl_float2> x_buffer(sample_count());
-
-        for (size_t i = 0; i != sample_count(); ++i) {
-            x_buffer[i].s[0] = std::real(src[i]);
-            x_buffer[i].s[1] = std::imag(src[i]);
-        }
+        std::vector<cl_float2> x_buffer = to_float2_vector(src, sample_count());
 
         if (clEnqueueWriteBuffer(
                     m_queue,
@@ -646,13 +680,91 @@ public:
 
         if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
 
-        for (size_t i = 0; i != sample_count(); ++i) {
-            dst[i] = Complex(y1_buffer[i].s[0], y1_buffer[i].s[1]);
-        }
+        convert(dst, y1_buffer);
     }
 
-    void step(Complex* dst, Complex const* src, size_t N)
+    void step(Complex* dst, Complex const* src, size_t B)
     {
+        cl_int ec;
+
+        std::vector<cl_float2> y1_buffer = to_float2_vector(src, sample_count());
+
+        if (clEnqueueWriteBuffer(
+                    m_queue,
+                    m_y1_mem,
+                    CL_TRUE,
+                    0,
+                    byte_count(),
+                    &y1_buffer[0],
+                    0,
+                    NULL,
+                    NULL) != CL_SUCCESS) {
+            fatal("Coule not write to Y1 buffer.");
+        }
+
+        if (clSetKernelArg(
+                    m_step_kernel,
+                    0,
+                    sizeof(m_y1_mem),
+                    &m_y1_mem
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 0.");
+        }
+
+        cl_uint b = B;
+        if (clSetKernelArg(
+                    m_step_kernel,
+                    1,
+                    sizeof(b),
+                    &b
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 1.");
+        }
+
+        if (clSetKernelArg(
+                    m_step_kernel,
+                    2,
+                    sizeof(m_y2_mem),
+                    &m_y2_mem
+                    ) != CL_SUCCESS) {
+            fatal("Could not set kernel argument 2.");
+        }
+
+        size_t global_work_size = sample_count();
+        ec = clEnqueueNDRangeKernel(
+                m_queue,
+                m_step_kernel,
+                1,
+                NULL,
+                &global_work_size,
+                NULL,
+                0,
+                NULL,
+                NULL);
+        if (ec != CL_SUCCESS) {
+            std::cout << error_code_to_string(ec) << "\n";
+            fatal("Could not enqueue kernel.");
+        }
+
+        std::vector<cl_float2> y2_buffer(y1_buffer.size());
+        ec = clEnqueueReadBuffer(
+                m_queue,
+                m_y2_mem,
+                CL_TRUE,
+                0,
+                byte_count(),
+                &y2_buffer[0],
+                0,
+                NULL,
+                NULL);
+        if (ec != CL_SUCCESS) {
+            std::cout << error_code_to_string(ec) << "\n";
+            fatal("Could not read Y2 buffer.");
+        }
+
+        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
+
+        convert(dst, y2_buffer);
     }
 
     size_t byte_count() const
@@ -676,10 +788,6 @@ private:
     cl_command_queue m_queue;
     cl_context m_context;
 };
-
-static void fftcl_step(Complex* dst, Complex const* src, size_t N)
-{
-}
 
 // FIXME: remove this
 static void run_opencl() __attribute__((unused));
@@ -947,13 +1055,19 @@ static Float prop_fftcl_init_equals_fft_init(Fourier& fourier, Signal const& sig
     return error(expected, actual);
 }
 
-static Float prop_fftcl_step_equals_fft_step(Signal const& signal)
+static Float prop_fftcl_step_equals_fft_step(Fourier& fourier, Signal const& signal)
 {
+    assert(fourier.sample_count() == signal.size());
+
+    size_t B = 128;
+    size_t transform_count = signal.size()/B;
+    assert(B >= 1);
+
     Signal expected = signal;
-    fft_step(&expected[0], expected.size());
+    fft_step(&expected[0], transform_count, B);
 
     Signal actual(signal.size());
-    fftcl_step(&actual[0], &signal[0], actual.size());
+    fourier.step(&actual[0], &signal[0], B);
 
     return error(expected, actual);
 }
@@ -978,7 +1092,7 @@ int main()
     TEST(prop_reverse_bits(0xAA, 0x100, 0x55));
     TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
     TEST_RESIDUE(prop_fftcl_init_equals_fft_init(fourier, random_signal(1024)));
-    TEST_RESIDUE(prop_fftcl_step_equals_fft_step(random_signal(1024)));
+    TEST_RESIDUE(prop_fftcl_step_equals_fft_step(fourier, random_signal(1024)));
 
 //    print_reverse_bits_table();
 //    run_opencl();
