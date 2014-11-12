@@ -108,6 +108,13 @@ static inline Complex Q(int n, int N)
     return exp(i*(Float) 2.0*(Float) M_PI*(Float) n/(Float) N);
 }
 
+static void fft_init(Complex* dst, Complex const* src, size_t N)
+{
+    for (size_t i = 0; i != N; ++i) {
+        dst[i] = src[reverse_bits(i, N)];
+    }
+}
+
 static void fft_step(Complex* spectrum, size_t spectrumSize)
 {
     for (size_t i = 0; i != spectrumSize/2; ++i) {
@@ -137,9 +144,7 @@ static Signal fft(Signal const& signal)
     size_t const N = signal.size();
     Signal result(N);
 
-    for (size_t i = 0; i != N; ++i) {
-        result[i] = signal[reverse_bits(i, N)];
-    }
+    fft_init(&result[0], &signal[0], N);
 
     size_t transform_count = N/2;
     while (transform_count >= 1) {
@@ -451,6 +456,14 @@ static std::vector<char> read_program(std::string const& name)
     return result;
 }
 
+static void fftcl_init(Complex* dst, Complex const* src, size_t N)
+{
+}
+
+static void fftcl_step(Complex* dst, Complex const* src, size_t N)
+{
+}
+
 static void run_opencl()
 {
     cl_int ec;
@@ -702,6 +715,28 @@ static void print_reverse_bits_table()
     std::cout << ss.str();
 }
 
+static Float prop_fftcl_init_equals_fft_init(Signal const& signal)
+{
+    Signal expected(signal.size());
+    fft_init(&expected[0], &signal[0], expected.size());
+
+    Signal actual(signal.size());
+    fftcl_init(&actual[0], &signal[0], actual.size());
+
+    return error(expected, actual);
+}
+
+static Float prop_fftcl_step_equals_fft_step(Signal const& signal)
+{
+    Signal expected = signal;
+    fft_step(&expected[0], expected.size());
+
+    Signal actual(signal.size());
+    fftcl_step(&actual[0], &signal[0], actual.size());
+
+    return error(expected, actual);
+}
+
 int main()
 {
     TEST_RESIDUE(prop_inverse_dft(Signal(1024, 1)));
@@ -719,6 +754,8 @@ int main()
     TEST_RESIDUE(prop_fft_is_decomposed_dft(random_signal(1024)));
     TEST(prop_reverse_bits(0xAA, 0x100, 0x55));
     TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
+    TEST_RESIDUE(prop_fftcl_init_equals_fft_init(random_signal(1024)));
+    TEST_RESIDUE(prop_fftcl_step_equals_fft_step(random_signal(1024)));
 
 //    print_reverse_bits_table();
     run_opencl();
