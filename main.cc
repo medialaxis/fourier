@@ -601,8 +601,6 @@ public:
 
     void init(Complex* dst, Complex const* src)
     {
-        cl_int ec;
-
         std::vector<cl_float2> x_buffer = to_float2_vector(src, sample_count());
 
         load(m_x_mem, x_buffer);
@@ -611,21 +609,7 @@ public:
         set_arg(m_init_kernel, 1, m_sample_power);
         set_arg(m_init_kernel, 2, m_y1_mem);
 
-        size_t global_work_size = x_buffer.size();
-        ec = clEnqueueNDRangeKernel(
-                m_queue,
-                m_init_kernel,
-                1,
-                NULL,
-                &global_work_size,
-                NULL,
-                0,
-                NULL,
-                NULL);
-        if (ec != CL_SUCCESS) {
-            std::cout << error_code_to_string(ec) << "\n";
-            fatal("Could not enqueue kernel.");
-        }
+        run_kernel(m_init_kernel);
 
         std::vector<cl_float2> y1_buffer(sample_count());
         store(&y1_buffer[0], m_y1_mem);
@@ -637,8 +621,6 @@ public:
 
     void step(Complex* dst, Complex const* src, size_t B)
     {
-        cl_int ec;
-
         std::vector<cl_float2> y1_buffer = to_float2_vector(src, sample_count());
 
         load(m_y1_mem, y1_buffer);
@@ -647,10 +629,24 @@ public:
         set_arg(m_step_kernel, 1, B);
         set_arg(m_step_kernel, 2, m_y2_mem);
 
+        run_kernel(m_step_kernel);
+
+        std::vector<cl_float2> y2_buffer(sample_count());
+        store(&y2_buffer[0], m_y2_mem);
+
+        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
+
+        convert(dst, y2_buffer);
+    }
+
+    void run_kernel(cl_kernel kernel)
+    {
+        cl_int ec;
+
         size_t global_work_size = sample_count();
         ec = clEnqueueNDRangeKernel(
                 m_queue,
-                m_step_kernel,
+                kernel,
                 1,
                 NULL,
                 &global_work_size,
@@ -662,13 +658,6 @@ public:
             std::cout << error_code_to_string(ec) << "\n";
             fatal("Could not enqueue kernel.");
         }
-
-        std::vector<cl_float2> y2_buffer(sample_count());
-        store(&y2_buffer[0], m_y2_mem);
-
-        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
-
-        convert(dst, y2_buffer);
     }
 
     void set_arg(cl_kernel kernel, cl_uint arg_index, cl_uint arg)
