@@ -98,6 +98,16 @@ static Signal idft(Signal const& spectrum)
     return result;
 }
 
+static void print_signal(std::string name, Signal const& signal) __attribute__((unused));
+static void print_signal(std::string name, Signal const& signal)
+{
+    std::cout << name << "=";
+    for (size_t i = 0; i != signal.size(); ++i) {
+        std::cout << signal[i] << ",";
+    }
+    std::cout << "\n";
+}
+
 static inline Complex W(int k, int N)
 {
     return exp(-i*(Float) 2.0*(Float) M_PI*(Float) k/(Float) N);
@@ -134,16 +144,6 @@ static void fft_step(Complex* spectrum, size_t transform_count, size_t sample_co
     for (size_t transform = 0; transform != transform_count; ++transform) {
         fft_step_spectrum(&spectrum[transform*sample_count], sample_count);
     }
-}
-
-static void print_signal(std::string name, Signal const& signal) __attribute__((unused));
-static void print_signal(std::string name, Signal const& signal)
-{
-    std::cout << name << "=";
-    for (size_t i = 0; i != signal.size(); ++i) {
-        std::cout << signal[i] << ",";
-    }
-    std::cout << "\n";
 }
 
 static Signal fft(Signal const& signal)
@@ -1019,7 +1019,7 @@ static Float prop_fftcl_step_equals_fft_step(Fourier& fourier, Signal const& sig
     assert(B >= 1);
 
     Signal expected = signal;
-    fft_step(&expected[0], transform_count, B);
+    fft_step(&expected[0], transform_count/2, 2*B);
 
     Signal actual(signal.size());
     fourier.step(&actual[0], &signal[0], B);

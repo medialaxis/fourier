@@ -66,7 +66,7 @@ kernel void fft_init(Complex global const* X, uint exponent_n, Complex global* Y
 kernel void fft_step(Complex global const* Y, uint B, Complex global* Y_)
 {
     uint i = get_global_id(0);
-    uint B_ = B/2;
+    uint B_ = B*2;
     uint n_ = i/B_;
     uint k_ = i%B_;
 
