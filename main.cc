@@ -614,7 +614,7 @@ public:
         std::vector<cl_float2> y1_buffer(sample_count());
         store(&y1_buffer[0], m_y1_mem);
 
-        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
+        finish();
 
         convert(dst, y1_buffer);
     }
@@ -634,9 +634,14 @@ public:
         std::vector<cl_float2> y2_buffer(sample_count());
         store(&y2_buffer[0], m_y2_mem);
 
-        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
+        finish();
 
         convert(dst, y2_buffer);
+    }
+
+    void finish()
+    {
+        if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
     }
 
     void run_kernel(cl_kernel kernel)
