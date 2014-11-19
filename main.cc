@@ -18,6 +18,7 @@ typedef std::vector<Complex> Signal;
 static const Float eps = 0.01;
 static const Complex i(0, 1);
 
+static bool operator==(cl_float2 a, cl_float2 b) __attribute__((unused));
 static bool operator==(cl_float2 a, cl_float2 b)
 {
     return a.s[0] == b.s[0] && a.s[1] == b.s[1];
