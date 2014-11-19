@@ -285,7 +285,7 @@ static void test(const char* test_name, bool result)
 
 static Signal random_signal(size_t size)
 {
-    std::default_random_engine generator(0);
+    static std::default_random_engine generator(0);
     std::uniform_real_distribution<Float> distribution(0.0, 1.0);
 
     Signal result(size);
