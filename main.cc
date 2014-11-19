@@ -868,7 +868,5 @@ int main()
     TEST_RESIDUE(prop_fftcl_step_equals_fft_step(fourier, random_signal(1024)));
     TEST_RESIDUE(prop_fftcl_equals_fft(fourier, random_signal(1024)));
 
-//    print_reverse_bits_table();
-
     return 0;
 }
