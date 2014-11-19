@@ -649,6 +649,29 @@ public:
         convert(dst, y2_buffer);
     }
 
+    void fft(Complex* spectrum, Complex const* signal)
+    {
+        std::vector<cl_float2> x_buffer = to_float2_vector(signal, sample_count());
+        load(m_x_mem, x_buffer);
+
+        init(m_x_mem, m_sample_power, m_y1_mem);
+
+        cl_mem y = m_y1_mem;
+        cl_mem y_ = m_y2_mem;
+        cl_uint B = 2;
+        while (B != sample_count()) {
+            step(y, B, y_);
+            std::swap(y, y_);
+            B <<= 1;
+        }
+
+        std::vector<cl_float2> y_buffer(sample_count());
+        store(&y_buffer[0], y);
+        finish();
+
+        convert(spectrum, y_buffer);
+    }
+
     void finish()
     {
         if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
@@ -1042,6 +1065,18 @@ static Float prop_fftcl_step_equals_fft_step(Fourier& fourier, Signal const& sig
     return error(expected, actual);
 }
 
+static Float prop_fftcl_equals_fft(Fourier& fourier, Signal const& signal)
+{
+    assert(fourier.sample_count() == signal.size());
+
+    Signal expected = fft(signal);
+
+    Signal actual(signal.size());
+    fourier.fft(&actual[0], &signal[0]);
+
+    return error(expected, actual);
+}
+
 int main()
 {
     Fourier fourier(10);
@@ -1063,6 +1098,7 @@ int main()
     TEST(prop_reverse_bits(0xA5, 0x100, 0xA5));
     TEST_RESIDUE(prop_fftcl_init_equals_fft_init(fourier, random_signal(1024)));
     TEST_RESIDUE(prop_fftcl_step_equals_fft_step(fourier, random_signal(1024)));
+    TEST_RESIDUE(prop_fftcl_equals_fft(fourier, random_signal(1024)));
 
 //    print_reverse_bits_table();
 //    run_opencl();
