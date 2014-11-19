@@ -658,7 +658,7 @@ public:
 
         cl_mem y = m_y1_mem;
         cl_mem y_ = m_y2_mem;
-        cl_uint B = 2;
+        cl_uint B = 1;
         while (B != sample_count()) {
             step(y, B, y_);
             std::swap(y, y_);
