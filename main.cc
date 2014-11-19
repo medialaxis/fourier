@@ -599,17 +599,22 @@ public:
         if (clReleaseContext(m_context) != CL_SUCCESS) fatal("Could not release context.");
     }
 
+    void init(cl_mem x, cl_uint sample_power, cl_mem y)
+    {
+        set_arg(m_init_kernel, 0, x);
+        set_arg(m_init_kernel, 1, sample_power);
+        set_arg(m_init_kernel, 2, y);
+
+        run_kernel(m_init_kernel);
+    }
+
     void init(Complex* dst, Complex const* src)
     {
         std::vector<cl_float2> x_buffer = to_float2_vector(src, sample_count());
 
         load(m_x_mem, x_buffer);
 
-        set_arg(m_init_kernel, 0, m_x_mem);
-        set_arg(m_init_kernel, 1, m_sample_power);
-        set_arg(m_init_kernel, 2, m_y1_mem);
-
-        run_kernel(m_init_kernel);
+        init(m_x_mem, m_sample_power, m_y1_mem);
 
         std::vector<cl_float2> y1_buffer(sample_count());
         store(&y1_buffer[0], m_y1_mem);
@@ -619,17 +624,22 @@ public:
         convert(dst, y1_buffer);
     }
 
+    void step(cl_mem y, cl_uint B, cl_mem y_)
+    {
+        set_arg(m_step_kernel, 0, y);
+        set_arg(m_step_kernel, 1, B);
+        set_arg(m_step_kernel, 2, y_);
+
+        run_kernel(m_step_kernel);
+    }
+
     void step(Complex* dst, Complex const* src, size_t B)
     {
         std::vector<cl_float2> y1_buffer = to_float2_vector(src, sample_count());
 
         load(m_y1_mem, y1_buffer);
 
-        set_arg(m_step_kernel, 0, m_y1_mem);
-        set_arg(m_step_kernel, 1, B);
-        set_arg(m_step_kernel, 2, m_y2_mem);
-
-        run_kernel(m_step_kernel);
+        step(m_y1_mem, B, m_y2_mem);
 
         std::vector<cl_float2> y2_buffer(sample_count());
         store(&y2_buffer[0], m_y2_mem);
