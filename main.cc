@@ -672,6 +672,11 @@ public:
         convert(spectrum, y_buffer);
     }
 
+    void flush()
+    {
+        if (clFlush(m_queue) != CL_SUCCESS) fatal("Could not flush.");
+    }
+
     void finish()
     {
         if (clFinish(m_queue) != CL_SUCCESS) fatal("Could not finish.");
