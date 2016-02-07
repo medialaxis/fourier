@@ -505,7 +505,7 @@ public:
         print_platforms();
 
         cl_platform_id platform = get_platform("NVIDIA CUDA");
-        cl_device_id device = get_device(platform, "GeForce GTX 550 Ti");
+        cl_device_id device = get_device(platform, "GeForce GTX 970");
 
         cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties) platform, 0 };
         m_context = clCreateContext(properties, 1, &device, notify, NULL, NULL);
