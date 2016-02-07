@@ -16,8 +16,7 @@ dotS :: Signal -> Signal -> Complex Double
 dotS a b = VU.sum $ VU.zipWith dot a b
 
 minus :: Signal -> Signal -> Signal
-minus a b = VU.generate sz (\i -> a VU.! i - b VU.! i) where
-    sz = VU.length a
+minus a b = VU.zipWith (-) a b 
 
 -- | RMS of error signal.
 errorS :: Signal -> Signal -> Double
