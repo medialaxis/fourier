@@ -26,6 +26,12 @@ main = shakeArgs shakeOptions{shakeFiles="_build"} $ do
         need ["_build/cfourier"]
         cmd "_build/cfourier"
 
+    phony "run_hs" $ do
+        need ["_build/hsfourier"]
+        cmd "_build/hsfourier"
+
     "_build/cfourier" %> \out -> do
         need ["cfourier.cc"]
         cmd "g++ -o _build/cfourier cfourier.cc --std=c++11 -O2 -Wall -lOpenCL"
+
+    "_build/hsfourier" %> \out -> buildBin "_build/hsfourier" "hsfourier.hs" "_build/" ""
