@@ -3,6 +3,23 @@ import Data.Complex
 
 type Signal = VU.Vector (Complex Double)
 
+dot :: Complex Double -> Complex Double -> Complex Double
+dot a b = a * conjugate b
+
+dotS :: Signal -> Signal -> Complex Double
+dotS a b = sum $ [(a VU.! i) `dot` (b VU.! i) | i <- [0..sz-1]] where
+    sz = VU.length a
+
+minus :: Signal -> Signal -> Signal
+minus a b = VU.generate sz (\i -> a VU.! i - b VU.! i) where
+    sz = VU.length a
+
+-- | RMS of error signal.
+error :: Signal -> Signal -> Double
+error a b = sqrt (realPart (dotS e e)/fromIntegral sz) where
+    e = a `minus` b
+    sz = VU.length a
+
 i = 0 :+ 1
 
 dft :: Signal -> Signal
@@ -28,4 +45,5 @@ idft spectrum = VU.generate sz go where
     f n k = (spectrum VU.! k) * exp (i*2*pi*fromIntegral k*fromIntegral n/fromIntegral sz)
 
 main = do
-    print "hello"
+    let example = VU.replicate 1024 ((1 :+ 0) :: Complex Double)
+    print $ dft example
