@@ -13,8 +13,7 @@ dot :: Complex Double -> Complex Double -> Complex Double
 dot a b = a * conjugate b
 
 dotS :: Signal -> Signal -> Complex Double
-dotS a b = sum $ [(a VU.! i) `dot` (b VU.! i) | i <- [0..sz-1]] where
-    sz = VU.length a
+dotS a b = VU.sum $ VU.zipWith dot a b
 
 minus :: Signal -> Signal -> Signal
 minus a b = VU.generate sz (\i -> a VU.! i - b VU.! i) where
