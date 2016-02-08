@@ -7,6 +7,9 @@ module Fourier (
 import qualified Data.Vector.Unboxed as VU
 import Data.Complex
 
+scale :: Double -> Complex Double -> Complex Double
+scale x (a :+ b) = (x*a :+ x*b)
+
 type Signal = VU.Vector (Complex Double)
 
 dot :: Complex Double -> Complex Double -> Complex Double
@@ -20,7 +23,7 @@ minus a b = VU.zipWith (-) a b
 
 -- | RMS of error signal.
 errorS :: Signal -> Signal -> Double
-errorS a b = sqrt (realPart (dotS e e)/fromIntegral sz) where
+errorS a b = sqrt ((realPart (dotS e e))/fromIntegral sz) where
     e = a `minus` b
     sz = VU.length a
 
@@ -35,18 +38,18 @@ dft signal = VU.generate sz go where
     sz = VU.length signal
 
     f :: Int -> Int -> Complex Double
-    f k n = (signal VU.! n) * exp (-i*2*pi*fromIntegral k*fromIntegral n/fromIntegral sz)
+    f k n = (signal VU.! n) * exp (scale (-2*pi*fromIntegral k*fromIntegral n/fromIntegral sz) i)
 
 idft :: Signal -> Signal
 idft spectrum = VU.generate sz go where
     go :: Int -> Complex Double
-    go n = (sum $ map (f n) [0..sz-1])/fromIntegral sz
+    go n = scale (1/fromIntegral sz) (sum $ map (f n) [0..sz-1])
 
     sz :: Int
     sz = VU.length spectrum
 
     f :: Int -> Int -> Complex Double
-    f n k = (spectrum VU.! k) * exp (i*2*pi*fromIntegral k*fromIntegral n/fromIntegral sz)
+    f n k = (spectrum VU.! k) * exp (scale (2*pi*fromIntegral k*fromIntegral n/fromIntegral sz) i)
 
 prop_inverseDft :: Signal -> Double
 prop_inverseDft testSignal = errorS testSignal (idft (dft testSignal))
