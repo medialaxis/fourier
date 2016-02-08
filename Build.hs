@@ -28,7 +28,7 @@ main = shakeArgs shakeOptions{shakeFiles="_build"} $ do
 
     phony "run_hs" $ do
         need ["_build/hsfourier"]
-        cmd "_build/hsfourier"
+        cmd "_build/hsfourier +RTS -s"
 
     "_build/cfourier" %> \out -> do
         need ["cfourier.cc"]
