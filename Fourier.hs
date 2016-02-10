@@ -30,17 +30,17 @@ errorS a b = sqrt ((realPart (dotS e e))/fromIntegral sz) where
 i = 0 :+ 1
 
 dft :: Signal -> Signal
-dft signal = VU.generate sz (\k -> VU.sum $ VU.imap (\i x -> f x k i) signal) where
-    f :: Complex Double -> Int -> Int -> Complex Double
-    f sn k n = sn * exp (scale (-2*pi*fromIntegral k*fromIntegral n/fromIntegral sz) i)
+dft signal = VU.generate sz $ \k -> VU.sum $ VU.imap (f k) signal where
+    f :: Int -> Int -> Complex Double -> Complex Double
+    f k n sn = sn * exp (scale (-2*pi*fromIntegral k*fromIntegral n/fromIntegral sz) i)
 
     sz :: Int
     sz = VU.length signal
 
 idft :: Signal -> Signal
-idft spectrum = VU.generate sz (\n -> scale (1/fromIntegral sz) (VU.sum $ VU.imap (\i x -> f x n i) spectrum)) where
-    f :: Complex Double -> Int -> Int -> Complex Double
-    f sn n k = sn * exp (scale (2*pi*fromIntegral k*fromIntegral n/fromIntegral sz) i)
+idft spectrum = VU.generate sz $ \n -> scale (1/fromIntegral sz) (VU.sum $ VU.imap (f n) spectrum) where
+    f :: Int -> Int -> Complex Double -> Complex Double
+    f n k sn = sn * exp (scale (2*pi*fromIntegral k*fromIntegral n/fromIntegral sz) i)
 
     sz :: Int
     sz = VU.length spectrum
