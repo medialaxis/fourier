@@ -7,7 +7,7 @@ module Fourier (
 import qualified Data.Vector.Unboxed as VU
 import Data.Complex
 
-scale :: Double -> Complex Double -> Complex Double
+scale :: Num a => a -> Complex a -> Complex a
 scale x (a :+ b) = (x*a :+ x*b)
 
 type Signal = VU.Vector (Complex Double)
