@@ -27,6 +27,7 @@ errorS a b = sqrt ((realPart (dotS e e))/fromIntegral sz) where
     e = a `minus` b
     sz = VU.length a
 
+i :: Complex Double
 i = 0 :+ 1
 
 dft :: Signal -> Signal

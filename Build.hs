@@ -16,7 +16,7 @@ buildBin target source outputDir flags = do
     -- Main.hi) for all executables.
     Exit _ <- quietly $ cmd "mv -f" (target <.> ".o") (outputDir ++ "/Main.o")
     Exit _ <- quietly $ cmd "mv -f" (target <.> ".hi") (outputDir ++ "/Main.hi")
-    unit $ quietly $ cmd "ghc -o" target "--make" source "-outputdir" outputDir "-hpcdir" outputDir "-j4 -O2 -threaded -rtsopts -fno-ignore-asserts" flags
+    unit $ quietly $ cmd "ghc -o" target "--make" source "-outputdir" outputDir "-hpcdir" outputDir "-j4 -O2 -Wall -Werror -fwarn-unused-do-bind -fno-warn-type-defaults -threaded -rtsopts -fno-ignore-asserts" flags
     unit $ quietly $ cmd "mv -f" (outputDir ++ "/Main.o") (target <.> ".o")
     unit $ quietly $ cmd "mv -f" (outputDir ++ "/Main.hi") (target <.> ".hi")
  
@@ -30,8 +30,17 @@ main = shakeArgs shakeOptions{shakeFiles="_build"} $ do
         need ["_build/hsfourier"]
         cmd "_build/hsfourier +RTS -s"
 
+    phony "view_bench" $ do
+        need ["_build/benchmark.html"]
+        cmd "firefox _build/benchmark.html"
+
     "_build/cfourier" %> \out -> do
         need ["cfourier.cc"]
         cmd "g++ -o _build/cfourier cfourier.cc --std=c++11 -O2 -Wall -lOpenCL"
 
     "_build/hsfourier" %> \out -> buildBin "_build/hsfourier" "hsfourier.hs" "_build/" ""
+    "_build/Benchmark" %> \out -> buildBin "_build/Benchmark" "Benchmark.hs" "_build/" ""
+
+    "_build/benchmark.html" %> \out -> do
+        need ["_build/Benchmark"]
+        cmd "_build/Benchmark --output _build/benchmark.html"
