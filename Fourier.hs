@@ -1,7 +1,7 @@
-module Fourier (
-    dft,
-    idft,
-    prop_inverseDft
+module Fourier
+    ( dft
+    , idft
+    , prop_inverseDft
     ) where
 
 import qualified Data.Vector.Unboxed as VU
