@@ -1,0 +1,2 @@
+:set -Wall -fwarn-unused-do-bind -fno-warn-type-defaults
+:load Benchmark
