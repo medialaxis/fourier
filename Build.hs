@@ -24,11 +24,11 @@ main :: IO ()
 main = shakeArgs shakeOptions{shakeFiles="_build"} $ do
     phony "run" $ do
         need ["_build/cfourier"]
-        cmd "_build/cfourier"
+        cmd "time _build/cfourier"
 
     phony "run_hs" $ do
         need ["_build/hsfourier"]
-        cmd "_build/hsfourier +RTS -s"
+        cmd "time _build/hsfourier +RTS -s"
 
     phony "view_bench" $ do
         need ["_build/benchmark.html"]
